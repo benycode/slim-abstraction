@@ -13,6 +13,7 @@ use Monolog\Formatter\LineFormatter;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\UriFactoryInterface;
+use Slim\Exception\HttpNotFoundException;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
 use BenyCode\Slim\Middleware\ExceptionMiddleware;
