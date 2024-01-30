@@ -9,12 +9,12 @@ use Slim\App as SlimApp;
 
 final class App
 {
-    public static function run(string $configPath, array $dependencies, array $actionPath) : SlimApp
+    public static function run(array $actionPath, array $dependencies) : SlimApp
     {
         $container = (new ContainerBuilder)
             ->addDefinitions(
                 \array_merge(
-                    DI::create($configPath, $actionPath),
+                    DI::create($actionPath),
                     $dependencies,
                 ),
             )
