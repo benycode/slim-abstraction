@@ -33,16 +33,29 @@ use BenyCode\Slim\Middleware\OnePathXApiTokenProtectionMiddleware as HealthCheck
 
 final class DI
 {
-    public static function create(string $configPath, array $actionPath) : array
+    public static function create(array $actionPath) : array
     {
         return [
-            'settings' => fn () => require $configPath . '/settings.php',
+            'settings' => function (ContainerInterface $container) {
+                $env = [];
+
+                foreach ($_ENV as $key => $value) {
+                    if (is_string($value) && null !== json_decode($value)) {
+                        $decodedValue = json_decode($value, true);
+                        $env[$key] = $decodedValue;
+                    } else {
+                        $env[$key] = $value;
+                    }
+                }
+
+                return $env;
+            },
 
             CallableResolver::class => fn (ContainerInterface $container) => new CallableResolver($container),
 
             RouteCollectorInterface::class => function (ContainerInterface $container) use ($actionPath) {
 
-                $debug = $container->get('settings')['debug'];
+                $debug = $container->get('settings')['api_debug'];
 
                 $collector = new AnnotationRouteCollector($container->get(DecoratedResponseFactory::class), $container->get(CallableResolver::class));
                 $collector->setDefaultControllersPath(...$actionPath);
@@ -51,7 +64,7 @@ final class DI
                 return $collector;
             },
 
-            App::class => function (ContainerInterface $container) use ($configPath) {
+            App::class => function (ContainerInterface $container) {
 
                 $app = AppFactory::createFromContainer($container);
 
@@ -70,22 +83,10 @@ final class DI
                     ->setName('any')
                 ;
 
-                if (file_exists($configPath . '/before.middleware.php')) {
-                    (require $configPath . '/before.middleware.php')($app);
-                }
-
-                if (file_exists($configPath . '/middleware.php')) {
-                    (require $configPath . '/middleware.php')($app);
-                } else {
-                    $app->addBodyParsingMiddleware();
-                    $app->addRoutingMiddleware();
-                    $app->add(SettingsUpMiddleware::class);
-                    $app->add(ExceptionMiddleware::class);
-                }
-
-                if (file_exists($configPath . '/after.middleware.php')) {
-                    (require $configPath . '/after.middleware.php')($app);
-                }
+                $app->addBodyParsingMiddleware();
+                $app->addRoutingMiddleware();
+                $app->add(SettingsUpMiddleware::class);
+                $app->add(ExceptionMiddleware::class);
 
                 return $app;
             },
@@ -100,7 +101,7 @@ final class DI
             UriFactoryInterface::class => fn (ContainerInterface $container) => $container->get(Psr17Factory::class),
 
             LoggerInterface::class => function (ContainerInterface $container) {
-                $settings = $container->get('settings')['logger'];
+                $settings = $container->get('settings')['api_logger'];
                 $logger = new Logger('app');
 
                 $level = $settings['level'];
@@ -111,7 +112,7 @@ final class DI
                 return $logger;
             },
             ExceptionMiddleware::class => function (ContainerInterface $container) {
-                $settings = $container->get('settings')['error'];
+                $settings = $container->get('settings')['api_error'];
 
                 return new ExceptionMiddleware(
                     $container->get(ResponseFactoryInterface::class),
@@ -135,9 +136,9 @@ final class DI
 
                 return new InfoEndpointMiddleware(
                     [
-                        'info_endpoint' => $settings['info']['endpoint'],
+                        'info_endpoint' => $settings['api_info']['endpoint'],
                     ],
-                    $settings['info']['version'],
+                    $settings['api_info']['version'],
                 );
             },
             HealthCheckEndpointMiddleware::class => function (ContainerInterface $container) {
@@ -147,7 +148,7 @@ final class DI
 
                 return new HealthCheckEndpointMiddleware(
                     [
-                        'health_endpoint' => $settings['health']['endpoint'],
+                        'health_endpoint' => $settings['api_health']['endpoint'],
                     ],
                     $container->get(LoggerInterface::class),
                 );
@@ -159,8 +160,8 @@ final class DI
 
                 return new HealthCheckEndpointProtectionMiddleware(
                     [
-                        'path' => $settings['health']['endpoint'],
-                        'x-api-token' => $settings['health']['protection_token'],
+                        'path' => $settings['api_health']['endpoint'],
+                        'x-api-token' => $settings['api_health']['protection_token'],
                     ],
                     $container->get(LoggerInterface::class),
                 );
@@ -172,9 +173,9 @@ final class DI
 
                 return new LeaderElectionMiddleware(
                     [
-                        'leader_election_endpoint' => $settings['health']['endpoint'],
-                        'etcd_endpoint' => $settings['leadership']['etcd_endpoint'],
-                        'alection_frequency' => $settings['leadership']['alection_frequency'],
+                        'leader_election_endpoint' => $settings['api_health']['endpoint'],
+                        'etcd_endpoint' => $settings['api_leadership']['etcd_endpoint'],
+                        'alection_frequency' => $settings['api_leadership']['alection_frequency'],
                     ],
                     $container->get(LoggerInterface::class),
                 );
@@ -187,12 +188,12 @@ final class DI
 
                 return new APISIXRegisterMiddleware(
                     [
-                        'register_endpoint' => $settings['health']['endpoint'],
-                        'service_id' => $settings['APISIX']['service_id'],
-                        'service' => $settings['APISIX']['service'],
-                        'route' => $settings['APISIX']['route'],
-                        'api_admin_secret' => $settings['APISIX']['api_admin_secret'],
-                        'api_endpoint' => $settings['APISIX']['api_endpoint'],
+                        'register_endpoint' => $settings['api_health']['endpoint'],
+                        'service_id' => $settings['api_apisix']['service_id'],
+                        'service' => $settings['api_apisix']['service'],
+                        'route' => $settings['api_apisix']['route'],
+                        'api_admin_secret' => $settings['api_apisix']['api_admin_secret'],
+                        'api_endpoint' => $settings['api_apisix']['api_endpoint'],
                     ],
                     $container->get(LoggerInterface::class),
                 );
