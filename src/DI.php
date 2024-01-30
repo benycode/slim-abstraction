@@ -6,19 +6,25 @@ namespace BenyCode\Slim\Abstraction;
 
 use Slim\App;
 use Monolog\Logger;
+use Slim\CallableResolver;
 use Psr\Log\LoggerInterface;
 use Slim\Factory\AppFactory;
 use Monolog\Handler\StreamHandler;
 use Monolog\Formatter\LineFormatter;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Container\ContainerInterface;
+use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriFactoryInterface;
 use Slim\Exception\HttpNotFoundException;
+use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Message\StreamFactoryInterface;
+use Slim\Interfaces\RouteCollectorInterface;
 use Psr\Http\Message\ResponseFactoryInterface;
+use Slim\Http\Factory\DecoratedResponseFactory;
 use BenyCode\Slim\Middleware\ExceptionMiddleware;
 use BenyCode\Slim\Middleware\SettingsUpMiddleware;
 use Psr\Http\Message\ServerRequestFactoryInterface;
+use Slim\AnnotationRouter\AnnotationRouteCollector;
 use BenyCode\Slim\Middleware\InfoEndpointMiddleware;
 use BenyCode\Slim\Middleware\APISIXRegisterMiddleware;
 use BenyCode\Slim\Middleware\LeaderElectionMiddleware;
@@ -27,23 +33,32 @@ use BenyCode\Slim\Middleware\OnePathXApiTokenProtectionMiddleware as HealthCheck
 
 final class DI
 {
-    public static function create(string $configPath) : array
+    public static function create(string $configPath, array $actionPath) : array
     {
         return [
             'settings' => fn () => require $configPath . '/settings.php',
+
+            CallableResolver::class => fn (ContainerInterface $container) => new CallableResolver($container),
+
+            RouteCollectorInterface::class => function (ContainerInterface $container) use ($actionPath) {
+
+                $debug = $container->get('settings')['debug'];
+
+                $collector = new AnnotationRouteCollector($container->get(DecoratedResponseFactory::class), $container->get(CallableResolver::class));
+                $collector->setDefaultControllersPath(...$actionPath);
+                $collector->collectRoutes($debug);
+
+                return $collector;
+            },
 
             App::class => function (ContainerInterface $container) use ($configPath) {
 
                 $app = AppFactory::createFromContainer($container);
 
-                if (file_exists($configPath . '/routes.php')) {
-                    (require $configPath . '/routes.php')($app);
-                }
-
                 $app
                     ->get(
                         '/{any:.*}',
-                        function (Request $request, Response $response) {
+                        function (ServerRequestInterface $request, ResponseInterface $response) {
                             throw new HttpNotFoundException($request);
                         },
                     )
