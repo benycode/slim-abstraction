@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace BenyCode\Slim\Abstraction;
+namespace Slim\Abstraction;
 
 use DI\ContainerBuilder;
 use Slim\App as SlimApp;
