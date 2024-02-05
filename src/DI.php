@@ -39,7 +39,7 @@ final class DI
             'settings' => function (ContainerInterface $container) {
                 $env = [];
 
-                foreach ($_ENV as $key => $value) {
+                foreach (\getenv() as $key => $value) {
                     if (is_string($value) && null !== json_decode($value)) {
                         $decodedValue = json_decode($value, true);
                         $env[$key] = $decodedValue;
